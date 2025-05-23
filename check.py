@@ -4,9 +4,6 @@ from pygame.locals import *
 import os
 
 pygame.init()
-
-background_image = pygame.image.load("textures/background.jpg").convert()
-
 screen = pygame.display.set_mode((1024, 768))
 pygame.display.set_caption("Караван")
 font = pygame.font.SysFont('Arial', 24)
@@ -40,6 +37,7 @@ class Card:
         if os.path.exists(path):
             return pygame.image.load(path).convert_alpha()
         return None
+
 
     def is_special(self):
         return isinstance(self.value, str)
@@ -98,10 +96,7 @@ class Player:
             caravan = self.caravans[caravan_index]
 
             if card.is_joker():
-                if caravan:
-                    caravan.clear()
-                else:
-                    return False
+                caravan.clear()
             elif card.value == "Jack":
                 if caravan:
                     caravan.pop()
@@ -115,10 +110,8 @@ class Player:
             elif card.value == "King":
                 if caravan:
                     last_card = caravan[-1]
-                    if isinstance(last_card.value, int):
-                        caravan.append(Card(last_card.value, last_card.suit, last_card.source))
-                    else:
-                        return False
+                    # Копируем карту, но обязательно с таким же значением
+                    caravan.append(Card(last_card.value, last_card.suit, last_card.source))
                 else:
                     return False
             elif isinstance(card.value, int):
@@ -142,21 +135,16 @@ class Player:
         ascending = self.is_ascending(caravan)
         if ascending is None:
             return True
-        if ascending and card.value > last_card.value:
-            return True
-        elif not ascending and card.value < last_card.value:
-            return True
-        return False
+        if ascending:
+            return card.value > last_card.value
+        else:
+            return card.value < last_card.value
 
     def is_ascending(self, caravan):
         values = [c.get_numeric_value() for c in caravan if isinstance(c.value, int)]
         if len(values) < 2:
             return None
-        if all(x < y for x, y in zip(values, values[1:])):
-            return True
-        elif all(x > y for x, y in zip(values, values[1:])):
-            return False
-        return None
+        return values[-1] > values[-2]
 
 class Game:
     def __init__(self):
@@ -217,13 +205,14 @@ class Game:
             self.draw_card_visual(card, 50 + i * 90, y)
 
     def ai_move(self):
+        # ИИ выбирает первый подходящий ход: карту + караван
         for card_index, card in enumerate(self.current_player.hand):
             for caravan_index in range(3):
                 if self.current_player.play_card_to_caravan(card_index, caravan_index):
                     self.current_player.draw_card()
                     self.switch_turn()
                     return
-
+                
     def check_win(self, player):
         sold = 0
         for caravan in player.caravans:
@@ -260,11 +249,13 @@ class Game:
                                     self.current_player.draw_card()
                                     self.switch_turn()
 
+            # Если ход ИИ, ждем 0.7 секунды, чтобы имитировать "мышление"
             if self.current_player.is_ai:
                 self.ai_timer += dt
                 if self.ai_timer > 700:
                     self.ai_move()
 
+            # --- Проверка победы ---
             if self.check_win(self.player1):
                 winner = self.player1.name
                 self.running = False
@@ -272,8 +263,7 @@ class Game:
                 winner = self.player2.name
                 self.running = False
 
-            #screen.fill(WHITE)
-            screen.blit(pygame.transform.scale(background_image, (1024, 768)), (0, 0))
+            screen.fill(WHITE)
             self.draw_hand(self.player1, 620)
             self.draw_hand(self.player2, 100)
             self.draw_caravans(self.player1, 400)
@@ -287,6 +277,7 @@ class Game:
 
             pygame.display.flip()
 
+        # Показываем победителя 2 секунды перед выходом
         if winner:
             pygame.time.wait(2000)
         pygame.quit()
