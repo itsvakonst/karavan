@@ -3,24 +3,29 @@ import random
 import os
 from pygame.locals import *
 
+# pygame
 pygame.init()
 screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 width, height = screen.get_size()
 pygame.display.set_caption("Караван")
+
+#  шрифты + цвета 
+
 font = pygame.font.SysFont('Impact', 24)
 large_font = pygame.font.SysFont('Impact', 70)
 
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 CARD_COLOR = (200, 200, 255)
-
 SPECIAL_CARD = (255, 200, 200)
 CARAVAN_COLOR = (200, 255, 200)
-
 BUTTON_COLOR = (50, 150, 255)
 BUTTON_HOVER = (80, 180, 255)
 
+# фоновое изображение
 background_image = pygame.image.load("textures/background.jpg").convert()
+
+# ------------------ кнопка ------------------
 
 class Button:
     def __init__(self, rect, text, action):
@@ -39,6 +44,8 @@ class Button:
 
     def is_clicked(self, pos):
         return self.rect.collidepoint(pos)
+
+# ------------------ карта ------------------
 
 class Card:
     def __init__(self, value, suit, source):
@@ -72,9 +79,12 @@ class Card:
         return self.value if isinstance(self.value, int) else 0
 
     def update_position(self):
+        # анимация
         speed = 0.2
         self.x += (self.target_x - self.x) * speed
         self.y += (self.target_y - self.y) * speed
+
+# ------------------ колода ------------------
 
 class Deck:
     def __init__(self, name):
@@ -83,6 +93,7 @@ class Deck:
         self.build()
 
     def build(self):
+        # колода + 2 джокера
         suits = ["Hearts", "Diamonds", "Clubs", "Spades"]
         values = list(range(1, 11)) + ["Jack", "Queen", "King"]
         for suit in suits:
@@ -94,6 +105,8 @@ class Deck:
 
     def draw(self):
         return self.cards.pop() if self.cards else None
+
+# ------------------ Игрок ------------------
 
 class Player:
     def __init__(self, name, deck, is_ai=False):
@@ -116,6 +129,7 @@ class Player:
             self.draw_card()
 
     def play_card_to_caravan(self, card_index, caravan_index):
+        # логика применения крутых карт и обычных карт
         if 0 <= card_index < len(self.hand) and 0 <= caravan_index < 3:
             card = self.hand[card_index]
             caravan = self.caravans[caravan_index]
@@ -152,6 +166,7 @@ class Player:
         return False
 
     def valid_numeric_play(self, card, caravan):
+        # проверка возможности хода числовой картой
         if not caravan:
             return True
         last_card = caravan[-1]
@@ -172,6 +187,8 @@ class Player:
             return False
         return None
 
+# ------------------ ВСЯ игра ------------------
+
 class Game:
     def __init__(self):
         self.running = True
@@ -180,6 +197,8 @@ class Game:
         self.result_text = ""
         self.buttons = []
         self.create_menu_buttons()
+
+    # -------- кнопки --------
 
     def create_menu_buttons(self):
         self.buttons = [
@@ -192,6 +211,16 @@ class Game:
             Button((width//2 - 100, height//2 + 10, 200, 50), "Начать заново", self.start_game),
             Button((width//2 - 100, height//2 + 70, 200, 50), "Выйти", self.exit_game)
         ]
+
+    def create_game_buttons(self):
+        self.buttons = [
+            Button((width - 220, height - 60, 200, 40), "Начать заново", self.start_game)
+        ]
+
+    def exit_game(self):
+        self.running = False
+
+    # -------- новая игра --------
 
     def start_game(self):
         self.deck1 = Deck("Player1")
@@ -210,13 +239,6 @@ class Game:
         self.player2.start_game()
         self.create_game_buttons()
 
-    def create_game_buttons(self):
-        self.buttons = [
-            Button((width - 220, height - 60, 200, 40), "Начать заново", self.start_game)
-        ]
-
-    def exit_game(self):
-        self.running = False
 
     def switch_turn(self):
         self.current_player, self.opponent = self.opponent, self.current_player
@@ -226,6 +248,11 @@ class Game:
 
     def caravan_value(self, caravan):
         return sum(card.get_numeric_value() for card in caravan if isinstance(card.value, int))
+
+    def check_win(self, player):
+        return sum(1 for caravan in player.caravans if 21 <= self.caravan_value(caravan) <= 26) >= 2
+
+    # -------- Отрисовка поля --------
 
     def draw_card_visual(self, card):
         card.update_position()
@@ -257,15 +284,19 @@ class Game:
             card.target_x, card.target_y = 50 + i * 90, y
             self.draw_card_visual(card)
 
+    def draw_buttons(self):
+        for button in self.buttons:
+            button.draw(screen)
+
+    # -------- AI думалка --------
+
     def ai_move(self):
         best_score = -1
-        best_move = None  # (card_index, caravan_index)
+        best_move = None
 
         for card_index, card in enumerate(self.current_player.hand):
             for caravan_index in range(3):
                 caravan = self.current_player.caravans[caravan_index]
-
-                # Пропускаем караваны уже "закрытые" (сумма 21-26)
                 current_value = self.caravan_value(caravan)
                 if 21 <= current_value <= 26:
                     continue
@@ -307,11 +338,7 @@ class Game:
                     best_score = score
                     break
 
-                # Добавим небольшой штраф, если караван уже близок к 21, чтобы стимулировать развитие других
-                penalty = 0
-                if current_value >= 18:
-                    penalty = 5  # штраф
-
+                penalty = 5 if current_value >= 18 else 0
                 adjusted_score = score - penalty
 
                 if adjusted_score <= 26 and adjusted_score > best_score:
@@ -327,14 +354,7 @@ class Game:
                 self.current_player.draw_card()
                 self.switch_turn()
 
-
-
-    def check_win(self, player):
-        return sum(1 for caravan in player.caravans if 21 <= self.caravan_value(caravan) <= 26) >= 2
-
-    def draw_buttons(self):
-        for button in self.buttons:
-            button.draw(screen)
+    # ------------------ Главный цикл ------------------
 
     def run(self):
         clock = pygame.time.Clock()
@@ -396,6 +416,8 @@ class Game:
             pygame.display.flip()
 
         pygame.quit()
+
+# ------------------ от винта ------------------
 
 if __name__ == "__main__":
     Game().run()
